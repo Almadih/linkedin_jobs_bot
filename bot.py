@@ -1,10 +1,12 @@
 import logging
 from telegram.ext import Updater, CommandHandler
-from db import insert_user,create_tables,get_user_by_telegram_id,insert_user_query,get_user_queries,get_query,get_query_by_id,delete_query
+from db import insert_user,create_tables,get_all_queries,get_all_users,get_user_by_telegram_id,insert_user_query,get_user_queries,get_query,get_query_by_id,delete_query
 import re
 import os
 
 create_tables()
+
+ADMIN_TELEGRAM_ID = os.environ['ADMIN_TELEGRAM_ID']
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -16,6 +18,15 @@ def start(update, context):
     if not get_user_by_telegram_id(user.id):
         insert_user(user.id,user.username)
     update.message.reply_text(f"Hello, {user.first_name}! I am your Telegram bot.")
+def number_of_users(update, context):
+    user = update.message.from_user
+    if user.id == int(ADMIN_TELEGRAM_ID):
+        update.message.reply_text(f"Total number of users ({len(get_all_users())})")
+
+def number_of_queries(update, context):
+    user = update.message.from_user
+    if user.id == int(ADMIN_TELEGRAM_ID):
+        update.message.reply_text(f"Total number of queries ({len(get_all_queries())})")
 
 def get_queries(update,context):
     user = update.message.from_user
@@ -75,6 +86,8 @@ def main():
     dp.add_handler(CommandHandler('add_query',add_query))
     dp.add_handler(CommandHandler('queries',get_queries))
     dp.add_handler(CommandHandler('cancel_query',cancel_query))
+    dp.add_handler(CommandHandler('num_users',number_of_users))
+    dp.add_handler(CommandHandler('num_queries',number_of_queries))
 
     # Start the Bot
     updater.start_polling()

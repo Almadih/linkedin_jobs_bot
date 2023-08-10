@@ -23,11 +23,15 @@ def main():
     logging.info(f"Processing {len(all_queries)} queries")
     for query in all_queries:
         _,user_telegram_id,job_title,job_location = query
+        logging.info(f"scraping ({job_title} - {job_location})")
         jobs = scrape_jobs(job_title,job_location)
+        new_jobs = 0
         for job in jobs:
             if not get_user_job_by_linkedin_id(user_telegram_id,job['id']):
                 send_job_message(job,user_telegram_id)
+                new_jobs = new_jobs + 1
                 add_user_job(user_telegram_id,job['id'])
+        logging.info(f"found {new_jobs} new jobs")
 
 
 if __name__ == '__main__':

@@ -22,6 +22,8 @@ def scrape_jobs(job_title,location):
     bs = BeautifulSoup(html,'html.parser')
 
     jobs_section = bs.find('ul','jobs-search__results-list')
+    if not jobs_section:
+        return []
     jobs = jobs_section.find_all('li')
     results = []
     for job in jobs:
