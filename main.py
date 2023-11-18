@@ -1,40 +1,75 @@
-from telegram import Bot
-from time import sleep
-from db import get_all_queries,get_user_job_by_linkedin_id,add_user_job
-from scraper import scrape_jobs
+#!/usr/bin/env python
+import functions_framework
+import asyncio
 import logging
-import os
+from http import HTTPStatus
+from flask import Response, make_response
+from bot_commands import CustomContext,start,number_of_queries,number_of_users,add_query,get_queries,cancel_query
+from telegram import Update
+from telegram.ext import (
+    Application,
+    CommandHandler,
+    ContextTypes,
+)
+from constants import TOKEN, URL
+from scraper import start_scrape
 
 
-# Set up logging
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s',
-                     level=logging.INFO)
-BOT_TOKEN = os.environ['BOT_TOKEN']
-bot = Bot(BOT_TOKEN)
+
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+# set higher logging level for httpx to avoid all GET and POST requests being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
+
+async def main(request) -> None:
+    """Set up PTB application and a web application for handling the incoming requests."""
+    context_types = ContextTypes(context=CustomContext)
+    # Here we set updater to None because we want our custom webhook server to handle the updates
+    # and hence we don't need an Updater instance
+    application = (
+        Application.builder().token(TOKEN).updater(None).context_types(context_types).build()
+    )
+
+    # register handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler('add_query',add_query))
+    application.add_handler(CommandHandler('queries',get_queries))
+    application.add_handler(CommandHandler('cancel_query',cancel_query))
+    application.add_handler(CommandHandler('num_users',number_of_users))
+    application.add_handler(CommandHandler('num_queries',number_of_queries))
+
+    # Pass webhook settings to telegram
+    await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
 
 
-SLEEPING_TIME = 30 * 60 
-def send_job_message(job,telegram_id):
-    message = f"Job Title: {job['title']}\nLocation: {job['location']}\nCompany: {job['company']}\nTime: {job['time']}\nURL: {job['url']}"
-    bot.send_message(telegram_id,message)
-
-def main():
-    all_queries = get_all_queries()
-    logging.info(f"Processing {len(all_queries)} queries")
-    for query in all_queries:
-        _,user_telegram_id,job_title,job_location = query
-        logging.info(f"scraping ({job_title} - {job_location})")
-        jobs = scrape_jobs(job_title,job_location)
-        new_jobs = 0
-        for job in jobs:
-            if not get_user_job_by_linkedin_id(user_telegram_id,job['id']):
-                send_job_message(job,user_telegram_id)
-                new_jobs = new_jobs + 1
-                add_user_job(user_telegram_id,job['id'])
-        logging.info(f"found {new_jobs} new jobs")
+    if request.path == '/telegram':
+        await telegram(application,request)
+    elif request.path == '/health-check':
+        return await health()
+    elif request.path == '/scrape':
+         await start_scrape(logger,application)
+    
+    async with application:
+             await application.start()
+             await application.stop()
+    return {"msg":"done"}
 
 
-if __name__ == '__main__':
-    while True:
-        main()
-        sleep(SLEEPING_TIME)
+async def telegram(application,request) -> None:
+        """Handle incoming Telegram updates by putting them into the `update_queue`"""
+        await application.update_queue.put(Update.de_json(data=request.get_json(), bot=application.bot))
+
+
+async def health() -> Response:
+        """For the health endpoint, reply with a simple plain text message."""
+        response = make_response({"msg":"The bot is still running fine :)"}, HTTPStatus.OK)
+        response.mimetype = "application/json"
+        return response
+
+@functions_framework.http
+def hello_http(request):
+    return asyncio.run(main(request))

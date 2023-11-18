@@ -1,132 +1,104 @@
-import sqlite3
+from google.cloud import firestore
 
-# Function to create the tables if they don't exist
-def create_tables():
-    connection = create_connection()
-    with connection:
-        connection.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
-                telegram_id TEXT NOT NULL,
-                name TEXT NOT NULL
-            )
-        ''')
-        connection.execute('''
-            CREATE TABLE IF NOT EXISTS jobs (
-                id INTEGER PRIMARY KEY,
-                linkedin_job_id TEXT NOT NULL,
-                user_telegram_id INTEGER,
-                FOREIGN KEY (user_telegram_id) REFERENCES users(telegram_id)
-            )
-        ''')
+# Set up Google Cloud Firestore client
+db = firestore.Client(project="attack-telegram-bot")
 
-        connection.execute('''
-        CREATE TABLE IF NOT EXISTS queries (
-            id INTEGER PRIMARY KEY,
-            user_telegram_id INTEGER,
-            job_title TEXT,
-            job_location TEXT
-        )
-        ''')
-    connection.close()
-def get_user_job_by_linkedin_id(telegram_id,linkedin_id):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-        SELECT * FROM jobs where user_telegram_id = ? and linkedin_job_id = ?
-        ''',(telegram_id,linkedin_id,))
-        return cursor.fetchall()
+def get_user_job_by_linkedin_id(linkedin_job_id,user_telegram_id):
+    jobs_collection = db.collection('jobs')
+    jobs = jobs_collection.where('user_telegram_id','==',user_telegram_id).where('linkedin_job_id','==',linkedin_job_id).get()
+    for job in jobs:
+        return job.to_dict()
+
+    return None
     
-def add_user_job(telegram_id,linkedin_id):
-    connection = create_connection()
-    with connection:
-        connection.execute('''
-        INSERT INTO jobs (linkedin_job_id,user_telegram_id) values (?,?)
-        ''',(linkedin_id,telegram_id,))
-    connection.close()
+def add_user_job(user_telegram_id,linkedin_job_id):
+    jobs_collection = db.collection('jobs')
+    jobs_collection.add({"user_telegram_id":user_telegram_id,"linkedin_job_id":linkedin_job_id})
 
-def get_user_queries(telegram_id):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-        SELECT id,job_title,job_location from queries where user_telegram_id = ?
-        ''',(telegram_id,))
-        return cursor.fetchall()
+def get_user_queries(user_telegram_id):
+    user = get_user_by_telegram_id(user_telegram_id)
+    if not user:
+        return False
+    user_ref = db.collection('users').document(user.id)
+    user_queries_collection = user_ref.collection('queries')
+    user_queries = user_queries_collection.stream()
+    queries = [query.to_dict() for query in user_queries]
+    for query in queries:
+        query.update({"user_telegram_id":user.to_dict()['telegram_id']})
+    
+    return queries
     
 
-def insert_user_query(telegram_id,job_title,job_location):
-    connection = create_connection()
-    with connection:
-        connection.execute('''
-        INSERT INTO queries (user_telegram_id,job_title,job_location) values (?,?,?)
-        ''',(telegram_id,job_title,job_location,))
-def delete_query(id,telegram_id):
-    connection = create_connection()
-    with connection:
-        connection.execute('''
-        DELETE FROM queries where id = ? and user_telegram_id = ?
-        ''',(id,telegram_id,))
-def get_query(telegram_id,job_title,job_location):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-        SELECT * FROM queries where user_telegram_id = ? and job_title = ? and job_location = ?
-        ''',(telegram_id,job_title,job_location,))
-        return cursor.fetchone()
+def add_user_query(user_telegram_id,job_title,job_location):
+    print(user_telegram_id)
+    user = get_user_by_telegram_id(user_telegram_id)
+    if not user:
+        return False
+    print(user.id)
+    user_ref = db.collection('users').document(user.id)
+    user_queries_collection = user_ref.collection('queries')
+    new_query_id = user.to_dict()['num_queries'] + 1
+    user_queries_collection.add({"id":new_query_id,"job_title":job_title,"job_location":job_location})
+    user_ref.update({"num_queries":new_query_id})
+
+def delete_user_query(id,user_telegram_id):
+    user = get_user_by_telegram_id(user_telegram_id)
+    if not user:
+        return False
     
-def get_query_by_id(id,telegram_id):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-        SELECT * FROM queries where id = ? and user_telegram_id = ?
-        ''',(id,telegram_id,))
-        return cursor.fetchone()
+    user_ref = db.collection('users').document(user.id)
+    user_queries_collection = user_ref.collection('queries')
+    user_queries = user_queries_collection.where('id','==',id).limit(1).get()
+    for query in user_queries:
+        user_ref.collection('queries').document(query.id).delete()
+
+def get_user_query(user_telegram_id,job_title,job_location):
+    user = get_user_by_telegram_id(user_telegram_id)
+    if not user:
+        return False
+    
+    user_ref = db.collection('users').document(user.id)
+    user_queries_collection = user_ref.collection('queries')
+    user_queries = user_queries_collection.where('job_title','==',job_title).where('job_location','==',job_location).limit(1).get()
+    for query in user_queries:
+        return query
+    return None
+    
+def get_user_query_by_id(id,user_telegram_id):
+    user = get_user_by_telegram_id(user_telegram_id)
+    if not user:
+        return False
+    
+    user_ref = db.collection('users').document(user.id)
+    user_queries_collection = user_ref.collection('queries')
+    user_queries = user_queries_collection.where('id','==',id).limit(1).get()
+    for query in user_queries:
+        return query
+    return None
     
 def get_all_queries():
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-        SELECT * FROM queries
-        ''',())
-        return cursor.fetchall()
-# Function to insert a new user into the users table
-def insert_user(telegram_id,name):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-            INSERT INTO users (telegram_id,name) VALUES (?,?)
-        ''', (telegram_id,name))
+    total_queries = []
+    for user in get_all_users():
+        total_queries.extend(get_user_queries(user['telegram_id']))
+    return total_queries
 
-    connection.close()
+def add_new_user(name,telegram_id):
+    users_collection = db.collection('users')
+    users_collection.add({"name":name,"telegram_id":telegram_id,"num_queries":0})
 
 def get_user_by_telegram_id(telegram_id):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-            SELECT * FROM users WHERE telegram_id = ?
-        ''',(telegram_id,))
-        return cursor.fetchone()
+    users_collection = db.collection('users')
+    users = users_collection.where('telegram_id','==',telegram_id).limit(1).get()
+    for user in users:
+        return user
+    return None
 
 # Function to insert a new job into the jobs table associated with a user
-def insert_job(linkedin_job_id, user_id):
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-            INSERT INTO jobs (linkedin_job_id,user_telegram_id) VALUES (?,?)
-        ''', (linkedin_job_id,user_id,))
-
-    connection.close()
+def add_user_job(linkedin_job_id, user_telegram_id):
+    jobs_collection = db.collection('jobs')
+    jobs_collection.add({"linkedin_job_id":linkedin_job_id,"user_telegram_id":user_telegram_id})
 
 def get_all_users():
-    connection = create_connection()
-    with connection:
-        cursor = connection.execute('''
-            SELECT * FROM users
-        ''',())
-        return cursor.fetchall()
-
-
-def create_connection():
-    db_path = "./database/database.db"
-    return sqlite3.connect(db_path)
-
+    users_collection = db.collection('users')
+    users = users_collection.stream()
+    return [user.to_dict() for user in users]

@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 import requests
 from dateparser import parse
 from datetime import datetime,timedelta
+from db import add_user_job, get_all_queries,get_user_job_by_linkedin_id
 
 
 
@@ -45,6 +46,22 @@ def scrape_jobs(job_title,location):
     
     return results
 
+async def send_job_message(job,telegram_id,bot):
+    message = f"Job Title: {job['title']}\nLocation: {job['location']}\nCompany: {job['company']}\nTime: {job['time']}\nURL: {job['url']}"
+    await bot.send_message(telegram_id,message)
 
+async def start_scrape(logger,application):
+    all_queries = get_all_queries()
+    logger.info(f"Processing {len(all_queries)} queries")
+    for query in all_queries:
+        logger.info(f"scraping ({query['job_title']} - {query['job_location']})")
+        jobs = scrape_jobs(query['job_title'],query['job_location'])
+        new_jobs = 0
+        for job in jobs:
+            if not get_user_job_by_linkedin_id(job['id'],query['user_telegram_id']):
+                await send_job_message(job,query['user_telegram_id'],application.bot)
+                new_jobs = new_jobs + 1
+                add_user_job(job['id'],query['user_telegram_id'])
+        logger.info(f"found {new_jobs} new jobs")
 
 
