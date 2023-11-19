@@ -1,4 +1,5 @@
 from google.cloud import firestore
+from datetime import datetime, timedelta
 
 # Set up Google Cloud Firestore client
 db = firestore.Client(project="attack-telegram-bot")
@@ -13,7 +14,7 @@ def get_user_job_by_linkedin_id(linkedin_job_id,user_telegram_id):
     
 def add_user_job(user_telegram_id,linkedin_job_id):
     jobs_collection = db.collection('jobs')
-    jobs_collection.add({"user_telegram_id":user_telegram_id,"linkedin_job_id":linkedin_job_id})
+    jobs_collection.add({"user_telegram_id":int(user_telegram_id),"linkedin_job_id":linkedin_job_id,"created_at":datetime.now()})
 
 def get_user_queries(user_telegram_id):
     user = get_user_by_telegram_id(user_telegram_id)
@@ -30,11 +31,9 @@ def get_user_queries(user_telegram_id):
     
 
 def add_user_query(user_telegram_id,job_title,job_location):
-    print(user_telegram_id)
     user = get_user_by_telegram_id(user_telegram_id)
     if not user:
         return False
-    print(user.id)
     user_ref = db.collection('users').document(user.id)
     user_queries_collection = user_ref.collection('queries')
     new_query_id = user.to_dict()['num_queries'] + 1
@@ -93,12 +92,20 @@ def get_user_by_telegram_id(telegram_id):
         return user
     return None
 
-# Function to insert a new job into the jobs table associated with a user
-def add_user_job(linkedin_job_id, user_telegram_id):
-    jobs_collection = db.collection('jobs')
-    jobs_collection.add({"linkedin_job_id":linkedin_job_id,"user_telegram_id":user_telegram_id})
 
 def get_all_users():
     users_collection = db.collection('users')
     users = users_collection.stream()
     return [user.to_dict() for user in users]
+
+def delete_old_job_documents():
+    jobs_collection = db.collection('jobs')
+    cutoff_datetime = datetime.now() - timedelta(hours=10)
+    jobs = jobs_collection.where('created_at','<=',cutoff_datetime)
+
+    # Get the documents
+    docs_to_delete = jobs.stream()
+
+    # Delete the documents
+    for doc in docs_to_delete:
+        doc.reference.delete()

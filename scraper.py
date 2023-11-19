@@ -2,7 +2,7 @@ from bs4 import BeautifulSoup
 import requests
 from dateparser import parse
 from datetime import datetime,timedelta
-from db import add_user_job, get_all_queries,get_user_job_by_linkedin_id
+from db import add_user_job, get_all_queries,get_user_job_by_linkedin_id, delete_old_job_documents
 
 
 
@@ -51,6 +51,7 @@ async def send_job_message(job,telegram_id,bot):
     await bot.send_message(telegram_id,message)
 
 async def start_scrape(logger,application):
+    delete_old_job_documents()
     all_queries = get_all_queries()
     logger.info(f"Processing {len(all_queries)} queries")
     for query in all_queries:
