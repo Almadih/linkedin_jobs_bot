@@ -1,8 +1,8 @@
 # Change the following to your desired values:
-#   __ACCOUNT_NUMBER__
-#   __ECR_REGION__
-#   __ECR_REPOSITORY_NAME__
-#   __ECS_CONTAINER_NAME__
+#   755468206974
+#   us-east-1
+#   linkedin
+#   linkedin
 
 version: 0.2
 phases:
@@ -13,8 +13,9 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws --version
-      - $(aws ecr get-login --region __ECR_REGION__ --no-include-email)
-      - REPOSITORY_URI=__ACCOUNT_NUMBER__.dkr.ecr.__ECR_REGION__.amazonaws.com/__ECR_REPOSITORY_NAME__
+      - $(aws ecr get-login --region us-east-1 --no-include-email)
+      755468206974.dkr.ecr.us-east-1.amazonaws.com/linkedin
+      - REPOSITORY_URI=755468206974.dkr.ecr.us-east-1.amazonaws.com/linkedin
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${COMMIT_HASH:=latest}
   build:
@@ -30,6 +31,6 @@ phases:
       - docker push $REPOSITORY_URI:latest
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - echo Writing image definitions file...
-      - printf '[{"name”:"__ECS_CONTAINER_NAME__","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - printf '[{"name”:"linkedin","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
 artifacts:
   files: imagedefinitions.json
