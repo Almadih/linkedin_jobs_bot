@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-import functions_framework
+
 import asyncio
 import logging
-from http import HTTPStatus
-from flask import Response, make_response
 from bot_commands import CustomContext,start,number_of_queries,number_of_users,add_query,get_queries,cancel_query
 from telegram import Update
 from telegram.ext import (
@@ -45,12 +43,13 @@ async def main(request) -> None:
     # Pass webhook settings to telegram
     await application.bot.set_webhook(url=f"{URL}/telegram", allowed_updates=Update.ALL_TYPES)
 
+    path = request.path.split('/')[-1]
 
-    if request.path == '/telegram':
-        await telegram(application,request)
-    elif request.path == '/health-check':
+    if path == '/telegram':
+        await telegram(application,request.body)
+    elif path == '/health-check':
         return await health()
-    elif request.path == '/scrape':
+    elif path == '/scrape':
          await start_scrape(logger,application)
     
     async with application:
@@ -64,12 +63,11 @@ async def telegram(application,request) -> None:
         await application.update_queue.put(Update.de_json(data=request.get_json(), bot=application.bot))
 
 
-async def health() -> Response:
+async def health() -> dict:
         """For the health endpoint, reply with a simple plain text message."""
-        response = make_response({"msg":"The bot is still running fine :)"}, HTTPStatus.OK)
-        response.mimetype = "application/json"
+        response = {"msg":"The bot is still running fine :)"}
         return response
 
-@functions_framework.http
-def hello_http(request):
-    return asyncio.run(main(request))
+
+def hello_http(event, context):
+    return asyncio.run(main(event))

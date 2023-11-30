@@ -3,5 +3,4 @@ dateparser
 bs4
 requests
 asyncio
-dateparser
-asyncio
+google-cloud-firestore
