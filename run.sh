@@ -1,0 +1,1 @@
+docker build -t linkinbot . && docker run -d --name linkinbot -v $(pwd)/database:/app/database --environment-file .env linkinbot

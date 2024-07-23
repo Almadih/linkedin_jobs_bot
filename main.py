@@ -1,9 +1,14 @@
-from telegram import Bot
+from telegram import Bot,constants
 from time import sleep
 from db import get_all_queries,get_user_job_by_linkedin_id,add_user_job
 from scraper import scrape_jobs
 import logging
 import os
+from dotenv import load_dotenv
+import asyncio
+
+load_dotenv()
+
 
 
 # Set up logging
@@ -14,11 +19,21 @@ bot = Bot(BOT_TOKEN)
 
 
 SLEEPING_TIME = 30 * 60 
-def send_job_message(job,telegram_id):
-    message = f"Job Title: {job['title']}\nLocation: {job['location']}\nCompany: {job['company']}\nTime: {job['time']}\nURL: {job['url']}"
-    bot.send_message(telegram_id,message)
+async def send_job_message(job,telegram_id):
+    message = f'''
+**Job Title**: {job['title']}
 
-def main():
+**Location:** {job['location']}
+
+**Company:** {job['company']}
+
+**Time:** {job['time']}
+
+[View Job]({job['url']})
+'''
+    await bot.send_message(telegram_id,message,parse_mode=constants.ParseMode.MARKDOWN)
+
+async def main():
     all_queries = get_all_queries()
     logging.info(f"Processing {len(all_queries)} queries")
     for query in all_queries:
@@ -28,7 +43,7 @@ def main():
         new_jobs = 0
         for job in jobs:
             if not get_user_job_by_linkedin_id(user_telegram_id,job['id']):
-                send_job_message(job,user_telegram_id)
+                await send_job_message(job,user_telegram_id)
                 new_jobs = new_jobs + 1
                 add_user_job(user_telegram_id,job['id'])
         logging.info(f"found {new_jobs} new jobs")
@@ -36,5 +51,5 @@ def main():
 
 if __name__ == '__main__':
     while True:
-        main()
+        asyncio.run(main())
         sleep(SLEEPING_TIME)

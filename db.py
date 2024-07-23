@@ -15,8 +15,7 @@ def create_tables():
             CREATE TABLE IF NOT EXISTS jobs (
                 id INTEGER PRIMARY KEY,
                 linkedin_job_id TEXT NOT NULL,
-                user_telegram_id INTEGER,
-                FOREIGN KEY (user_telegram_id) REFERENCES users(telegram_id)
+                user_telegram_id INTEGER
             )
         ''')
 
