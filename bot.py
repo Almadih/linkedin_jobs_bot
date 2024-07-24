@@ -4,7 +4,7 @@ from telegram import Update
 from db import insert_user,create_tables,get_all_queries,get_all_users,get_user_by_telegram_id,insert_user_query,get_user_queries,get_query,get_query_by_id,delete_query
 import re
 import os
-
+from main import send_jobs
 import dotenv
 
 dotenv.load_dotenv()
@@ -82,19 +82,22 @@ def main():
     # Replace 'YOUR_API_TOKEN' with the token you obtained from BotFather
     
     # Get the dispatcher to register handlers
-    dp = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).build()
+    job_queue = application.job_queue
 
     # Register the /start handler
-    dp.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("start", start))
 
-    dp.add_handler(CommandHandler('add_query',add_query))
-    dp.add_handler(CommandHandler('queries',get_queries))
-    dp.add_handler(CommandHandler('cancel_query',cancel_query))
-    dp.add_handler(CommandHandler('num_users',number_of_users))
-    dp.add_handler(CommandHandler('num_queries',number_of_queries))
+    application.add_handler(CommandHandler('add_query',add_query))
+    application.add_handler(CommandHandler('queries',get_queries))
+    application.add_handler(CommandHandler('cancel_query',cancel_query))
+    application.add_handler(CommandHandler('num_users',number_of_users))
+    application.add_handler(CommandHandler('num_queries',number_of_queries))
 
+    QUEUE_INTERVAL = 30 * 60 # 30 minutes in seconds 
+    job_queue.run_repeating(send_jobs, QUEUE_INTERVAL)
     # Start the Bot
-    dp.run_polling(allowed_updates=Update.ALL_TYPES)
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == '__main__':
